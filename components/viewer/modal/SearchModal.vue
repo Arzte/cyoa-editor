@@ -106,8 +106,7 @@ const search = debounce(() => {
   for (const row of data.rows) {
     const _results: ProjectObj[] = [];
     const options = {
-      ignoreDistance: true,
-      ignoreFieldNorm: true,
+      useExtendedSearch: true,
       keys: [
         { name: 'title', weight: 1 },
         { name: 'text', weight: 0.25 },
@@ -132,8 +131,7 @@ const search = debounce(() => {
   }
 
   const options = {
-    ignoreDistance: true,
-    ignoreFieldNorm: true,
+    useExtendedSearch: true,
     keys: [
       { name: 'items.title', weight: 1 },
       { name: 'items.text', weight: 0.125 },
