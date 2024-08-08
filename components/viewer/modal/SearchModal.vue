@@ -132,8 +132,6 @@ const search = debounce(() => {
   }
 
   const options = {
-    includeScore: true,
-    includeMatches: true,
     ignoreDistance: true,
     ignoreFieldNorm: true,
     keys: [
