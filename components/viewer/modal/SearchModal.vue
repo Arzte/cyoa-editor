@@ -16,17 +16,17 @@
         </div>
         <div class="search-result-list text-light">
           <div
-            v-for="group in searchResults"
-            :key="group.row.id"
+            v-for="result in searchResults"
+            :key="result.row.id"
             class="result-group"
           >
-            <div class="group-title">{{ group.row.title }}</div>
+            <div class="group-title">{{ result.row.title }}</div>
             <div
-              v-for="obj in group.items"
+              v-for="obj in result.items"
               :key="obj.id"
               class="result-item"
               :class="{ selected: searchView?.obj.id === obj.id }"
-              @click="preview(obj, group.row)"
+              @click="preview(obj, result.row)"
             >
               {{ obj.title }}
             </div>
@@ -46,8 +46,9 @@
 </template>
 
 <script setup lang="ts">
+import Fuse from 'fuse.js';
 import { debounce } from 'perfect-debounce';
-import { all, any, includes, isEmpty } from 'ramda';
+import { isEmpty } from 'ramda';
 
 import { Project, ProjectObj, ProjectRow } from '~/composables/project';
 import { useProjectRefs } from '~/composables/store/project';
@@ -91,43 +92,12 @@ watch(searchText, (newValue) => {
   }
 });
 
-function createSearchFunction(searchText: string) {
-  const searchTerms = searchText.toLowerCase().split(/\s+/);
-
-  const matchesOne = (text: string): boolean => {
-    const textLC = text.toLowerCase();
-    return any((term) => includes(term, textLC), searchTerms);
-  };
-
-  const matchesAll = (text: string): boolean => {
-    const textLC = text.toLowerCase();
-    return all((term) => includes(term, textLC), searchTerms);
-  };
-
-  return (obj: ProjectObj): boolean => {
-    const idMatch = matchesOne(obj.id);
-    const titleMatch = matchesAll(obj.title);
-    const textMatch = matchesAll(obj.text);
-
-    const anyAddonMatch = any((addon) => {
-      const titleMatch = matchesAll(addon.title);
-      const textMatch = matchesAll(addon.text);
-      return titleMatch || textMatch;
-    }, obj.addons);
-
-    return idMatch || titleMatch || textMatch || anyAddonMatch;
-  };
-}
-
 const search = debounce(() => {
   if (!project.value) return;
 
-  const searchTextLC = searchText.value.toLowerCase();
-  const searchFn = createSearchFunction(searchText.value);
-
   const results: ResultGroup[] = [];
 
-  if (isEmpty(searchTextLC)) {
+  if (isEmpty(searchText.value)) {
     searchResults.value = [];
     return;
   }
@@ -135,23 +105,51 @@ const search = debounce(() => {
   const data: Project = project.value.data;
   for (const row of data.rows) {
     const _results: ProjectObj[] = [];
+    const options = {
+      ignoreDistance: true,
+      ignoreFieldNorm: true,
+      keys: [
+        { name: 'title', weight: 1 },
+        { name: 'text', weight: 0.25 },
+        { name: 'addons.title', weight: 0.5 },
+        { name: 'addons.text', weight: 0.25 },
+      ],
+    };
 
     for (const obj of row.objects) {
-      const objMatch = searchFn(obj);
-      if (objMatch) {
-        _results.push(obj);
-      }
+      _results.push(obj);
     }
 
     if (!isEmpty(_results)) {
+      const fuse = new Fuse(_results, options);
       results.push({
         row,
-        items: _results,
+        items: fuse
+          .search(searchText.value, { limit: 7 })
+          .map((result) => result.item),
       });
     }
   }
 
-  searchResults.value = results;
+  const options = {
+    includeScore: true,
+    includeMatches: true,
+    ignoreDistance: true,
+    ignoreFieldNorm: true,
+    keys: [
+      { name: 'items.title', weight: 1 },
+      { name: 'items.text', weight: 0.125 },
+      { name: 'items.addons.title', weight: 0.5 },
+      { name: 'items.addons.text', weight: 0.125 },
+      { name: 'row.title', weight: 0.25 },
+      { name: 'row.titleText', weight: 0.125 },
+    ],
+  };
+  const fuse = new Fuse(results, options);
+  const searchRes = fuse.search(searchText.value, { limit: 5 });
+  console.log(searchRes);
+
+  searchResults.value = searchRes.map((result) => result.item);
 }, 200);
 
 const preview = (obj: ProjectObj, row: ProjectRow) => {
